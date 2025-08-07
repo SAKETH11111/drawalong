@@ -8,7 +8,7 @@ export interface DropzoneProps {
   maxSizeBytes?: number;
 }
 
-export default function Dropzone({ onFile, maxSizeBytes = 6 * 1024 * 1024 }: DropzoneProps) {
+export default function Dropzone({ onFile, maxSizeBytes = 4 * 1024 * 1024 }: DropzoneProps) {
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
 
@@ -34,7 +34,7 @@ export default function Dropzone({ onFile, maxSizeBytes = 6 * 1024 * 1024 }: Dro
         return;
       }
       if (f.size > maxSizeBytes) {
-        setError("Image is too large (max 6MB)");
+        setError("Image is too large (max 4MB)");
         onFile(null);
         return;
       }

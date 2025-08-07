@@ -5,9 +5,10 @@ import { randomUUID } from "crypto";
 import { UTApi } from "uploadthing/server";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-// Constraints
-const MAX_BYTES = 6 * 1024 * 1024; // 6 MB
+// Constraints (Vercel serverless body limit is ~4.5MB; keep margin)
+const MAX_BYTES = 4 * 1024 * 1024; // 4 MB
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 
 export async function POST(req: NextRequest) {
@@ -36,10 +37,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    // Validate size
-    const size = typeof image.size === "number" ? image.size : (await image.arrayBuffer()).byteLength;
+    // Read once and reuse
+    const ab = await image.arrayBuffer();
+    const bytes = Buffer.from(ab);
+
+    // Validate size (keep under Vercel limit)
+    const size = typeof image.size === "number" ? image.size : bytes.byteLength;
     if (size > MAX_BYTES) {
-      return NextResponse.json({ error: "Image too large (max 6MB)" }, { status: 413 });
+      return NextResponse.json({ error: "Image too large (max 4MB)" }, { status: 413 });
     }
 
     // Validate type
@@ -49,7 +54,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Prepare attachment as base64 (do not store)
-    const bytes = Buffer.from(await image.arrayBuffer());
     const base64 = bytes.toString("base64");
     const filename =
       image.name ||
@@ -61,15 +65,43 @@ export async function POST(req: NextRequest) {
     let publicUrl: string | null = null;
     const utToken = process.env.UPLOADTHING_TOKEN;
     if (utToken) {
-      const utapi = new UTApi({ token: utToken });
-      const utRes = await utapi.uploadFiles(image);
-      if (utRes.error || !utRes.data) {
-        console.error("[submit] UploadThing error:", utRes.error);
-        return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+      try {
+        const utapi = new UTApi({ token: utToken });
+        const utRes: any = await utapi.uploadFiles(new File([bytes], filename, { type: mime }));
+        if (utRes.error || !utRes.data) {
+          console.error("[submit] UploadThing error:", utRes.error);
+          // fall through to Supabase if configured
+          throw new Error(typeof utRes.error === "string" ? utRes.error : utRes.error?.message || "UploadThing failed");
+        }
+        storagePath = utRes.data.key;
+        // Prefer new ufsUrl if available (url is deprecated in v9)
+        publicUrl = (utRes.data as any).ufsUrl || utRes.data.url;
+      } catch (e) {
+        // Attempt Supabase fallback when UT fails
+        const supabase = getSupabaseAdmin();
+        if (supabase) {
+          const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
+          const path = `submissions/${category || "unspecified"}/${videoId || "unknown"}/${Date.now()}-${randomUUID()}.${ext}`;
+          const upload = await supabase.storage.from("drawings").upload(path, bytes, { contentType: mime, upsert: false });
+          if (upload.error) {
+            console.error("[submit] Supabase upload error (fallback):", upload.error);
+            return NextResponse.json({ error: `Upload failed: ${upload.error.message}` }, { status: 500 });
+          }
+          storagePath = path;
+          const insert = await supabase
+            .from("submissions")
+            .insert({ email, name, category, video_id: videoId, image_path: path })
+            .select("id")
+            .single();
+          if (insert.error) {
+            console.error("[submit] Supabase insert error (fallback):", insert.error);
+            return NextResponse.json({ error: `DB insert failed: ${insert.error.message}` }, { status: 500 });
+          }
+          submissionId = String(insert.data.id);
+        } else {
+          console.warn("[submit] No upload backend configured — skipping persistence (UT failed, no Supabase)");
+        }
       }
-      storagePath = utRes.data.key;
-      // Prefer new ufsUrl if available (url is deprecated in v9)
-      publicUrl = (utRes.data as any).ufsUrl || utRes.data.url;
     } else {
       const supabase = getSupabaseAdmin();
       if (supabase) {

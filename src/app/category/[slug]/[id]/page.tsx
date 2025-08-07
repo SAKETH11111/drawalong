@@ -3,18 +3,19 @@
 import { getCategoryBySlug, getVideoById } from "@/data/videos";
 import SiteHeader from "@/components/SiteHeader";
 import YouTube, { YouTubeEvent, YouTubeProps } from "react-youtube";
-import { use, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Container from "@/components/Container";
 import Stepper from "@/components/Stepper";
 import Dropzone from "@/components/Dropzone";
 import { SubmissionProvider, useSubmission } from "@/context/SubmissionContext";
 import { compressImage } from "@/lib/image";
+import { useParams } from "next/navigation";
 
-export default function VideoPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
-  const p = use(params);
-  const category = getCategoryBySlug(p.slug);
-  const video = getVideoById(p.id);
+export default function VideoPage() {
+  const { slug, id } = useParams<{ slug: string; id: string }>();
+  const category = getCategoryBySlug(slug);
+  const video = getVideoById(id);
   if (!category || !video) {
     return (
       <div className="p-10">
