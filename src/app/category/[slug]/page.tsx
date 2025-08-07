@@ -2,6 +2,7 @@ import { getCategoryBySlug, getVideosByCategory, thumbnailUrl } from "@/data/vid
 import SiteHeader from "@/components/SiteHeader";
 import Link from "next/link";
 import { use } from "react";
+import Container from "@/components/Container";
 
 export default function CategoryPage({ params }: { params: Promise<{ slug: string }> }) {
   const p = use(params);
@@ -17,16 +18,17 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
   return (
     <div className="min-h-screen">
       <SiteHeader />
-      <section className="mx-auto max-w-6xl px-6 pt-12 pb-8">
-        <h1 className="text-4xl font-semibold">{category.name}</h1>
+      <Container className="pt-12 pb-8">
+        <div className="text-sm text-muted-foreground"><Link href="/">Home</Link> · {category.name}</div>
+        <h1 className="mt-2 text-4xl font-semibold">{category.name}</h1>
         <p className="mt-2 text-muted-foreground">{category.description}</p>
-      </section>
-      <section className="mx-auto max-w-6xl px-6 pb-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      </Container>
+      <Container className="pb-16 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {vids.map((v) => (
           <Link
             key={v.id}
             href={`/category/${category.slug}/${v.id}`}
-            className="group overflow-hidden rounded-2xl border border-border bg-card shadow hover:shadow-lg transition-shadow"
+            className="group overflow-hidden rounded-2xl border border-border bg-card elevate"
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
@@ -40,7 +42,7 @@ export default function CategoryPage({ params }: { params: Promise<{ slug: strin
             </div>
           </Link>
         ))}
-      </section>
+      </Container>
     </div>
   );
 }

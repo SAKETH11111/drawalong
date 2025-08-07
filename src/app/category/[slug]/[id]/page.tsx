@@ -5,6 +5,11 @@ import SiteHeader from "@/components/SiteHeader";
 import YouTube, { YouTubeEvent, YouTubeProps } from "react-youtube";
 import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Container from "@/components/Container";
+import Stepper from "@/components/Stepper";
+import Dropzone from "@/components/Dropzone";
+import { SubmissionProvider, useSubmission } from "@/context/SubmissionContext";
+import { compressImage } from "@/lib/image";
 
 export default function VideoPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const p = use(params);
@@ -56,107 +61,96 @@ export default function VideoPage({ params }: { params: Promise<{ slug: string; 
   return (
     <div className="min-h-screen">
       <SiteHeader />
-      <section className="mx-auto max-w-6xl px-6 pt-8 pb-10">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Link href={`/category/${category.slug}`}>{category.name}</Link>
-          <span>·</span>
-          <span>{video.title}</span>
-        </div>
-        <h1 className="mt-2 text-3xl font-semibold">{video.title}</h1>
+      <SubmissionProvider initial={{ category: category.slug, videoId: video.id }}>
+        <Container className="pt-8 pb-10">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Link href={`/category/${category.slug}`}>{category.name}</Link>
+            <span>·</span>
+            <span>{video.title}</span>
+          </div>
+          <h1 className="mt-2 text-3xl font-semibold">{video.title}</h1>
 
-        {/* Stepper */}
-        <div className="mt-6 flex items-center gap-4">
-          <StepDot active={step === 1} done={step > 1} label="Watch" />
-          <StepDot active={step === 2} done={step > 2} label="Upload" />
-          <StepDot active={step === 3} done={step > 3} label="Email" />
-          <StepDot active={step === 4} done={step > 4} label="Finish" />
-        </div>
+          <div className="mt-6">
+            <Stepper currentStep={step} />
+          </div>
 
-        {/* Step content */}
-        <div className="mt-8">
-          {step === 1 && (
-            <div>
-              <div className="aspect-video w-full overflow-hidden rounded-2xl border border-border bg-black">
-                <YouTube
-                  videoId={video.id}
-                  onReady={onReady}
-                  onStateChange={onStateChange}
-                  opts={{ playerVars: { modestbranding: 1, rel: 0 } }}
-                  className="w-full h-full"
-                  iframeClassName="w-full h-full"
-                />
-              </div>
-              <div className="mt-4 flex items-center justify-between">
-                <div className="text-sm text-muted-foreground">Progress: {(progress * 100).toFixed(0)}%</div>
-                <div className="flex gap-2">
-                  <button
-                    className="rounded-full px-4 py-2 border border-border hover:bg-muted/40"
-                    onClick={() => setCanProceed(true)}
-                    disabled={canProceed}
-                  >
-                    I’ve finished drawing
-                  </button>
-                  <button
-                    className="rounded-full px-4 py-2 bg-primary text-primary-foreground disabled:opacity-50"
-                    onClick={() => setStep(2)}
-                    disabled={!canProceed}
-                  >
-                    Next
-                  </button>
+          <div className="mt-8">
+            {step === 1 && (
+              <div>
+                <div className="aspect-video w-full overflow-hidden rounded-2xl border border-border bg-black">
+                  <YouTube
+                    videoId={video.id}
+                    onReady={onReady}
+                    onStateChange={onStateChange}
+                    opts={{ playerVars: { modestbranding: 1, rel: 0 } }}
+                    className="w-full h-full"
+                    iframeClassName="w-full h-full"
+                  />
+                </div>
+                <div className="mt-4 flex items-center justify-between">
+                  <div className="text-sm text-muted-foreground">Progress: {(progress * 100).toFixed(0)}%</div>
+                  <div className="flex gap-2">
+                    <button
+                      className="rounded-full px-4 py-2 border border-border hover:bg-muted/40"
+                      onClick={() => setCanProceed(true)}
+                      disabled={canProceed}
+                    >
+                      I’ve finished drawing
+                    </button>
+                    <button
+                      className="rounded-full px-4 py-2 bg-primary text-primary-foreground disabled:opacity-50"
+                      onClick={() => setStep(2)}
+                      disabled={!canProceed}
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {step === 2 && <UploadStep onNext={() => setStep(3)} />}
-          {step === 3 && <EmailStep onNext={() => setStep(4)} />}
-          {step === 4 && <FinishStep />}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function StepDot({ active, done, label }: { active: boolean; done: boolean; label: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <div
-        className={`h-3 w-3 rounded-full ${done ? "bg-secondary" : active ? "bg-primary" : "bg-muted"}`}
-        aria-hidden
-      />
-      <span className={`text-sm ${active ? "text-foreground" : "text-muted-foreground"}`}>{label}</span>
+            {step === 2 && <UploadStep onNext={() => setStep(3)} />}
+            {step === 3 && <EmailStep onNext={() => setStep(4)} />}
+            {step === 4 && <FinishStep />}
+          </div>
+        </Container>
+      </SubmissionProvider>
     </div>
   );
 }
 
 function UploadStep({ onNext }: { onNext: () => void }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const onFile = (f: File | null) => {
-    setFile(f);
-    setPreview(f ? URL.createObjectURL(f) : null);
+  const { file, setFile } = useSubmission();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFile = async (f: File | null) => {
+    setError(null);
+    if (!f) {
+      setFile(null);
+      return;
+    }
+    try {
+      setBusy(true);
+      const compressed = await compressImage(f, 1600, 0.85);
+      setFile(compressed);
+    } catch (e: any) {
+      setError(e?.message ?? "Failed to process image");
+      setFile(null);
+    } finally {
+      setBusy(false);
+    }
   };
+
   return (
     <div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="text-sm text-muted-foreground">Upload your drawing (JPG/PNG)</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => onFile(e.target.files?.[0] ?? null)}
-            className="mt-2 block w-full text-sm"
-          />
-          <p className="mt-2 text-sm text-muted-foreground">We’ll send this to a human reviewer for feedback.</p>
-        </div>
-        <div>{preview && /* eslint-disable-next-line @next/next/no-img-element */ <img alt="Preview" src={preview} className="rounded-xl border border-border" />}</div>
+      <label className="text-sm text-muted-foreground">Upload your drawing (JPG/PNG)</label>
+      <div className="mt-2">
+        <Dropzone onFile={handleFile} />
       </div>
+      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
       <div className="mt-6 flex justify-end">
-        <button
-          className="rounded-full px-4 py-2 bg-primary text-primary-foreground disabled:opacity-50"
-          onClick={onNext}
-          disabled={!file}
-        >
+        <button className="rounded-full px-4 py-2 bg-primary text-primary-foreground disabled:opacity-50" onClick={onNext} disabled={!file || busy}>
           Next
         </button>
       </div>
@@ -165,22 +159,26 @@ function UploadStep({ onNext }: { onNext: () => void }) {
 }
 
 function EmailStep({ onNext }: { onNext: () => void }) {
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
+  const { file, email, name, setEmail, setName, category, videoId } = useSubmission();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null);
 
   const onSubmit = async () => {
+    if (!file) return;
     setSubmitting(true);
     setError(null);
     try {
       const form = new FormData();
-      if (file) form.append("image", file);
+      form.append("image", file);
       form.append("email", email);
-      form.append("name", name);
+      if (name) form.append("name", name);
+      if (category) form.append("category", category);
+      if (videoId) form.append("videoId", videoId);
       const res = await fetch("/api/submit", { method: "POST", body: form });
-      if (!res.ok) throw new Error("Failed to send");
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j?.error || "Failed to send");
+      }
       onNext();
     } catch (e: any) {
       setError(e?.message ?? "Something went wrong");
@@ -192,34 +190,12 @@ function EmailStep({ onNext }: { onNext: () => void }) {
   return (
     <div className="max-w-xl">
       <label className="text-sm text-muted-foreground">Your name</label>
-      <input
-        className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2"
-        placeholder="Optional"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
+      <input className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2" placeholder="Your full name" value={name} onChange={(e) => setName(e.target.value)} required />
       <label className="mt-4 block text-sm text-muted-foreground">Email</label>
-      <input
-        className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2"
-        placeholder="you@example.com"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        type="email"
-      />
-      <label className="mt-4 block text-sm text-muted-foreground">Attach your drawing (again)</label>
-      <input
-        type="file"
-        accept="image/*"
-        onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-        className="mt-2 block w-full text-sm"
-      />
+      <input className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
       {error && <p className="mt-3 text-sm text-destructive">{error}</p>}
       <div className="mt-6 flex justify-end">
-        <button
-          className="rounded-full px-4 py-2 bg-primary text-primary-foreground disabled:opacity-50"
-          onClick={onSubmit}
-          disabled={!email || submitting || !file}
-        >
+        <button className="rounded-full px-4 py-2 bg-primary text-primary-foreground disabled:opacity-50" onClick={onSubmit} disabled={!email || !name || submitting || !file}>
           {submitting ? "Sending…" : "Send for review"}
         </button>
       </div>

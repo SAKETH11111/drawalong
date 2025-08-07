@@ -191,12 +191,64 @@ body {
 }
 
 /* Subtle animated grain overlay for hero sections */
-.grain:before {
+.grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.grain::before {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
   pointer-events: none;
+}
+
+/* Layered hero gradient using --primary and --secondary */
+.hero-gradient {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(60% 50% at 20% 10%, color-mix(in oklab, var(--primary) 28%, transparent), transparent 60%),
+    radial-gradient(70% 60% at 80% 20%, color-mix(in oklab, var(--secondary) 22%, transparent), transparent 65%),
+    radial-gradient(40% 40% at 50% 90%, color-mix(in oklab, var(--accent) 15%, transparent), transparent 70%);
+  filter: saturate(1.05);
+}
+
+/* Glass surface utility */
+.glass {
+  background-color: color-mix(in oklab, var(--card) 78%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--border);
+}
+
+/* Elevation micro-interaction */
+.elevate {
+  transition: transform 220ms ease, box-shadow 220ms ease;
+  box-shadow: var(--shadow);
+  will-change: transform;
+}
+.elevate:hover {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-lg);
+}
+.elevate:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+/* High-contrast focus ring baseline */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 3px;
+}
+
+/* Motion reduction */
+@media (prefers-reduced-motion: reduce) {
+  .elevate {
+    transition: none;
+  }
 }
 
 @layer base {
